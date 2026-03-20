@@ -1,0 +1,87 @@
+tar1090 Hook Setup for adsb_rotctl
+===================================
+
+This hook allows tar1090 to notify adsb_rotctl when you select or deselect
+an aircraft in the web interface, so the rotator automatically tracks it.
+
+
+Step 1: Locate config.js
+-------------------------
+
+The file is typically at:
+
+    /usr/local/share/tar1090/html/config.js
+
+
+Step 2: Append the hook
+------------------------
+
+Add the following code to the very end of config.js:
+
+    sudo nano /usr/local/share/tar1090/html/config.js
+
+Scroll to the bottom and paste this block:
+
+---8<--- cut here ---8<---
+
+// ── adsb_rotctl hook ────────────────────────────────────────────────────────
+// Polls SelectedPlane and sends selection changes to the adsb_rotctl script.
+// Uses window load event since tar1090 globals aren't ready when config.js loads.
+window.addEventListener('load', function() {
+    var rotctlPort = 7878;
+    var lastIcao = null;
+    setInterval(function() {
+        var icao = (typeof SelectedPlane !== 'undefined' && SelectedPlane) ? SelectedPlane.icao : null;
+        if (icao !== lastIcao) {
+            lastIcao = icao;
+            try {
+                fetch('http://' + location.hostname + ':' + rotctlPort + '/select', {
+                    method: 'POST',
+                    body: JSON.stringify({icao: icao || null})
+                }).catch(function(){});
+            } catch(e) {}
+        }
+    }, 500);
+});
+
+---8<--- cut here ---8<---
+
+Save and exit (Ctrl+O, Enter, Ctrl+X in nano).
+
+
+Step 3: Change the port (optional)
+------------------------------------
+
+If you started adsb_rotctl.py with a different --listen-port, change the
+rotctlPort value in the hook to match. The default is 7878.
+
+
+Step 4: Hard refresh your browser
+-----------------------------------
+
+Open tar1090 in your browser and do a hard refresh:
+
+    Ctrl+Shift+R  (or Cmd+Shift+R on Mac)
+
+This forces the browser to reload config.js instead of using a cached copy.
+
+
+Step 5: Verify it works
+------------------------
+
+Click on an aircraft in tar1090. The adsb_rotctl.py terminal should print:
+
+    [tar1090] Selected aircraft: c8221a
+
+
+Notes
+------
+
+- The hook polls SelectedPlane every 500ms. It does not modify tar1090's
+  behaviour in any way — it only observes which aircraft is selected.
+
+- tar1090 updates may overwrite config.js. After a tar1090 update, you
+  will need to re-add the hook.
+
+- If adsb_rotctl.py is not running, the fetch calls will silently fail.
+  This is by design — tar1090 continues to work normally.
